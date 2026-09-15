@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"golang.org/x/term"
@@ -21,7 +23,10 @@ func main() {
 	hold := flag.Bool("hold", false, "Keep the container running for kubectl exec")
 	flag.Parse()
 	if *hold {
-		select {}
+		signals := make(chan os.Signal, 1)
+		signal.Notify(signals, syscall.SIGTERM, syscall.SIGINT)
+		<-signals
+		return
 	}
 	if !term.IsTerminal(int(os.Stdin.Fd())) || !term.IsTerminal(int(os.Stdout.Fd())) {
 		log.Fatal("run with an interactive terminal: kubectl exec -it")
