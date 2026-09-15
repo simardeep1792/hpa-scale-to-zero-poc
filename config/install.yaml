@@ -281,7 +281,6 @@ spec:
         - --cert-dir=/tmp
         - --config=/etc/adapter/config.yaml
         - --secure-port=6443
-        - --logtostderr=true
         - --prometheus-url=http://prometheus.hpa-scale-to-zero.svc.cluster.local:9090
         - --metrics-relist-interval=15s
         - --v=2
