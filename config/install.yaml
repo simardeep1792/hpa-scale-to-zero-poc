@@ -187,17 +187,16 @@ metadata:
   namespace: hpa-scale-to-zero
 data:
   config.yaml: |
-    rules:
-      external:
-      - seriesQuery: 'queue_consumer_lag{namespace!="",name!=""}'
-        resources:
-          overrides:
-            namespace:
-              resource: namespace
-        name:
-          matches: "^queue_consumer_lag$"
-          as: "queue_consumer_lag"
-        metricsQuery: 'sum(<<.Series>>{<<.LabelMatchers>>}) by (<<.GroupBy>>)'
+    externalRules:
+    - seriesQuery: 'queue_consumer_lag{namespace!="",name!=""}'
+      resources:
+        overrides:
+          namespace:
+            resource: namespace
+      name:
+        matches: "^queue_consumer_lag$"
+        as: "queue_consumer_lag"
+      metricsQuery: 'sum(<<.Series>>{<<.LabelMatchers>>}) by (<<.GroupBy>>)'
 ---
 apiVersion: v1
 kind: ServiceAccount
