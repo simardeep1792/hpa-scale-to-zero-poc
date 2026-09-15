@@ -296,7 +296,6 @@ spec:
           allowPrivilegeEscalation: false
           capabilities:
             drop: [ALL]
-          readOnlyRootFilesystem: true
         resources:
           requests:
             cpu: 25m
@@ -307,14 +306,10 @@ spec:
         volumeMounts:
         - name: config
           mountPath: /etc/adapter
-        - name: tmp
-          mountPath: /tmp
       volumes:
       - name: config
         configMap:
           name: prometheus-adapter-config
-      - name: tmp
-        emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
