@@ -467,3 +467,41 @@ spec:
   - name: http
     port: 8080
     targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hpa-terminal-ui
+  namespace: hpa-scale-to-zero
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: hpa-terminal-ui
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: hpa-terminal-ui
+    spec:
+      serviceAccountName: hpa-control-ui
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: terminal-ui
+        image: hpa-scale-to-zero-terminal-ui:dev
+        imagePullPolicy: Never
+        args: [--hold]
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ALL]
+          readOnlyRootFilesystem: true
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi

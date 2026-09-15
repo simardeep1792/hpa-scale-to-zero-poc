@@ -19,3 +19,4 @@ jobs:
     - run: go test ./...
     - run: docker build -t hpa-scale-to-zero-poc:ci .
     - run: docker build --build-arg TARGET=control-ui -t hpa-scale-to-zero-control-ui:ci .
+    - run: docker build --build-arg TARGET=terminal-ui -t hpa-scale-to-zero-terminal-ui:ci .

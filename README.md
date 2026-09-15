@@ -38,6 +38,16 @@ ssh -L 8088:127.0.0.1:8088 root@100.77.239.77 'k3s kubectl -n hpa-scale-to-zero 
 
 Keep that terminal open while using the panel. The Service remains internal to Kubernetes and no extra Dell network port is exposed.
 
+## Terminal Control Panel
+
+Use the interactive terminal panel instead of the browser UI:
+
+```sh
+ssh -t root@100.77.239.77 'k3s kubectl -n hpa-scale-to-zero exec -it deployment/hpa-terminal-ui -- /app'
+```
+
+Press `0` for idle, `1` for one worker, `2` for two workers, `r` to refresh, and `q` to quit. The terminal panel changes queue lag only; the HPA continues to own worker replica count.
+
 ## Test
 
 Wait for the external metrics API and inspect the initial metric:
