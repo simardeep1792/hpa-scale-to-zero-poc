@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>Scale Zero Console</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#control">Skip to controls</a>
+  <main id="control" tabindex="-1">
+    <header>
+      <p class="eyebrow">Kubernetes v1.37 / External metric</p>
+      <h1>Scale Zero Console</h1>
+      <p class="intro">Set synthetic queue lag. The HPA decides worker replicas.</p>
+    </header>
+    <section class="status-card" aria-labelledby="status-title">
+      <h2 id="status-title">Live State</h2>
+      <dl>
+        <div><dt>Queue lag</dt><dd id="queue-lag">Loading</dd></div>
+        <div><dt>Worker replicas</dt><dd id="worker-replicas">Loading</dd></div>
+        <div><dt>Scaled to zero</dt><dd id="scaled-zero">Loading</dd></div>
+      </dl>
+    </section>
+    <section class="control-card" aria-labelledby="set-title">
+      <h2 id="set-title">Set Queue Lag</h2>
+      <form id="lag-form">
+        <fieldset>
+          <legend>Choose queued tasks</legend>
+          <div class="choices">
+            <label><input type="radio" name="lag" value="0" checked><span><strong>0</strong><small>Idle. HPA scales to zero.</small></span></label>
+            <label><input type="radio" name="lag" value="30"><span><strong>30</strong><small>Wake one worker.</small></span></label>
+            <label><input type="radio" name="lag" value="60"><span><strong>60</strong><small>Request two workers.</small></span></label>
+          </div>
+        </fieldset>
+        <button type="submit">Apply Queue Lag</button>
+      </form>
+      <p id="message" class="message" aria-live="polite"></p>
+    </section>
+    <p class="footnote">Prometheus scrape plus HPA reconciliation usually takes 30 to 60 seconds.</p>
+  </main>
+</body>
+</html>

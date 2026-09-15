@@ -26,6 +26,18 @@ make deploy-dell DELL_HOST=100.77.239.77
 
 The deploy command builds the exporter on the Dell, imports it into k3s containerd, then applies Prometheus, Prometheus Adapter, the worker, and the HPA.
 
+## Control Panel
+
+The optional control panel exposes only three safe queue lag values: `0`, `30`, and `60`. It has permission to patch only the `queue-lag-exporter` Deployment and to read the `queue-worker` HPA. It does not have permission to scale the worker directly.
+
+Start a secure SSH tunnel from your Mac, then open [http://localhost:8088](http://localhost:8088):
+
+```sh
+ssh -L 8088:127.0.0.1:8088 root@100.77.239.77 'k3s kubectl -n hpa-scale-to-zero port-forward service/hpa-control-ui 8088:8080'
+```
+
+Keep that terminal open while using the panel. The Service remains internal to Kubernetes and no extra Dell network port is exposed.
+
 ## Test
 
 Wait for the external metrics API and inspect the initial metric:

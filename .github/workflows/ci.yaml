@@ -18,3 +18,4 @@ jobs:
         go-version: "1.26.x"
     - run: go test ./...
     - run: docker build -t hpa-scale-to-zero-poc:ci .
+    - run: docker build --build-arg TARGET=control-ui -t hpa-scale-to-zero-control-ui:ci .

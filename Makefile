@@ -1,4 +1,5 @@
 IMAGE ?= hpa-scale-to-zero-poc:dev
+UI_IMAGE ?= hpa-scale-to-zero-control-ui:dev
 DELL_HOST ?= 100.77.239.77
 DEPLOY_USER ?= root
 
@@ -11,4 +12,4 @@ build:
 	docker build -t $(IMAGE) .
 
 deploy-dell:
-	DELL_HOST=$(DELL_HOST) DEPLOY_USER=$(DEPLOY_USER) IMAGE=$(IMAGE) ./scripts/deploy-dell.sh
+	DELL_HOST=$(DELL_HOST) DEPLOY_USER=$(DEPLOY_USER) IMAGE=$(IMAGE) UI_IMAGE=$(UI_IMAGE) ./scripts/deploy-dell.sh
