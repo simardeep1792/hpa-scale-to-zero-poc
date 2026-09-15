@@ -1,0 +1,384 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: hpa-scale-to-zero
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: hpa-scale-to-zero
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 10s
+    scrape_configs:
+    - job_name: queue-lag-exporter
+      static_configs:
+      - targets: [queue-lag-exporter.hpa-scale-to-zero.svc.cluster.local:8080]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: hpa-scale-to-zero
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: prometheus
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        fsGroup: 65534
+      containers:
+      - name: prometheus
+        image: quay.io/prometheus/prometheus:v2.55.1
+        args:
+        - --config.file=/etc/prometheus/prometheus.yml
+        - --storage.tsdb.path=/prometheus
+        - --web.enable-lifecycle
+        ports:
+        - containerPort: 9090
+          name: http
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        readinessProbe:
+          httpGet:
+            path: /-/ready
+            port: http
+        volumeMounts:
+        - name: config
+          mountPath: /etc/prometheus
+        - name: storage
+          mountPath: /prometheus
+      volumes:
+      - name: config
+        configMap:
+          name: prometheus-config
+      - name: storage
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: hpa-scale-to-zero
+spec:
+  selector:
+    app.kubernetes.io/name: prometheus
+  ports:
+  - name: http
+    port: 9090
+    targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: queue-lag-exporter
+  namespace: hpa-scale-to-zero
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: queue-lag-exporter
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: queue-lag-exporter
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: exporter
+        image: hpa-scale-to-zero-poc:dev
+        imagePullPolicy: Never
+        env:
+        - name: QUEUE_LAG
+          value: "0"
+        ports:
+        - containerPort: 8080
+          name: metrics
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: metrics
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ALL]
+          readOnlyRootFilesystem: true
+        resources:
+          requests:
+            cpu: 10m
+            memory: 16Mi
+          limits:
+            cpu: 50m
+            memory: 32Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: queue-lag-exporter
+  namespace: hpa-scale-to-zero
+spec:
+  selector:
+    app.kubernetes.io/name: queue-lag-exporter
+  ports:
+  - name: metrics
+    port: 8080
+    targetPort: metrics
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: queue-worker
+  namespace: hpa-scale-to-zero
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: queue-worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: queue-worker
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: worker
+        image: busybox:1.37.0
+        command: [sh, -c, "while true; do sleep 3600; done"]
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ALL]
+          readOnlyRootFilesystem: true
+          runAsUser: 65532
+          runAsGroup: 65532
+        resources:
+          requests:
+            cpu: 100m
+            memory: 64Mi
+          limits:
+            cpu: 100m
+            memory: 64Mi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-adapter-config
+  namespace: hpa-scale-to-zero
+data:
+  config.yaml: |
+    rules:
+      external:
+      - seriesQuery: 'queue_consumer_lag{namespace!="",name!=""}'
+        resources:
+          overrides:
+            namespace:
+              resource: namespace
+        name:
+          matches: "^queue_consumer_lag$"
+          as: "queue_consumer_lag"
+        metricsQuery: 'sum(<<.Series>>{<<.LabelMatchers>>}) by (<<.GroupBy>>)'
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus-adapter
+  namespace: hpa-scale-to-zero
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: hpa-scale-to-zero-prometheus-adapter-auth-delegator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+- kind: ServiceAccount
+  name: prometheus-adapter
+  namespace: hpa-scale-to-zero
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hpa-scale-to-zero-prometheus-adapter-auth-reader
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: extension-apiserver-authentication-reader
+subjects:
+- kind: ServiceAccount
+  name: prometheus-adapter
+  namespace: hpa-scale-to-zero
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: hpa-scale-to-zero-prometheus-adapter-resource-reader
+rules:
+- apiGroups: [""]
+  resources: [namespaces, nodes, pods]
+  verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: hpa-scale-to-zero-prometheus-adapter-resource-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: hpa-scale-to-zero-prometheus-adapter-resource-reader
+subjects:
+- kind: ServiceAccount
+  name: prometheus-adapter
+  namespace: hpa-scale-to-zero
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus-adapter
+  namespace: hpa-scale-to-zero
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus-adapter
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: prometheus-adapter
+    spec:
+      serviceAccountName: prometheus-adapter
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: adapter
+        image: registry.k8s.io/prometheus-adapter/prometheus-adapter:v0.12.0
+        args:
+        - --cert-dir=/tmp
+        - --config=/etc/adapter/config.yaml
+        - --secure-port=6443
+        - --logtostderr=true
+        - --prometheus-url=http://prometheus.hpa-scale-to-zero.svc.cluster.local:9090
+        - --metrics-relist-interval=15s
+        - --v=2
+        ports:
+        - containerPort: 6443
+          name: https
+        readinessProbe:
+          httpGet:
+            scheme: HTTPS
+            path: /healthz
+            port: https
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ALL]
+          readOnlyRootFilesystem: true
+        resources:
+          requests:
+            cpu: 25m
+            memory: 64Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+        volumeMounts:
+        - name: config
+          mountPath: /etc/adapter
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: config
+        configMap:
+          name: prometheus-adapter-config
+      - name: tmp
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus-adapter
+  namespace: hpa-scale-to-zero
+spec:
+  selector:
+    app.kubernetes.io/name: prometheus-adapter
+  ports:
+  - name: https
+    port: 443
+    targetPort: https
+---
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1beta1.external.metrics.k8s.io
+spec:
+  group: external.metrics.k8s.io
+  groupPriorityMinimum: 100
+  version: v1beta1
+  versionPriority: 100
+  insecureSkipTLSVerify: true
+  service:
+    name: prometheus-adapter
+    namespace: hpa-scale-to-zero
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: queue-worker
+  namespace: hpa-scale-to-zero
+  annotations:
+    kubernetes.io/description: "Scales queue-worker from an external queue lag metric."
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: queue-worker
+  minReplicas: 0
+  maxReplicas: 3
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 0
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 15
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+      - type: Pods
+        value: 3
+        periodSeconds: 15
+  metrics:
+  - type: External
+    external:
+      metric:
+        name: queue_consumer_lag
+        selector:
+          matchLabels:
+            name: worker_tasks
+      target:
+        type: Value
+        value: "30"
